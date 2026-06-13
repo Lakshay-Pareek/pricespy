@@ -31,7 +31,7 @@ PriceSpy became an experiment in building a miniature data pipeline similar to t
 
 ## Dashboard
 
-![Dashboard](docs/screenshots/dashboard.png)
+![Dashboard](dashboard.png)
 
 Real tracked products displayed in a unified data grid with buy/wait recommendations.
 
@@ -39,7 +39,7 @@ Real tracked products displayed in a unified data grid with buy/wait recommendat
 
 ## Historical Price Analysis
 
-![Chart](docs/screenshots/chart.png)
+![Chart](chart.png)
 
 Interactive 7D / 30D / All-time price history showing:
 
@@ -53,7 +53,7 @@ Interactive 7D / 30D / All-time price history showing:
 
 ## Adding Products
 
-![Add Product](docs/screenshots/add-product.png)
+![Add Product](add-product.png)
 
 Track products directly from Amazon and Flipkart URLs.
 
@@ -61,7 +61,7 @@ Track products directly from Amazon and Flipkart URLs.
 
 ## Live Simulation Events
 
-![Flash Sale](docs/screenshots/flash-sale.png)
+![Flash Sale](flash-sale.png)
 
 Demo controls generate:
 
@@ -76,7 +76,7 @@ Every event flows through Kafka before reaching PostgreSQL.
 
 ## Kafka Event Processing
 
-![Kafka Logs](docs/screenshots/kafka-logs.png)
+![Kafka Logs](kafka-logs.png)
 
 Kafka consumer processing price events and persisting them to PostgreSQL.
 
