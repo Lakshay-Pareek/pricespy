@@ -1,0 +1,139 @@
+networks:
+  pricespy-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  kafka_data:
+
+services:
+
+  # ─────────────────────────────────────────
+  # PostgreSQL 15
+  # ─────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: pricespy-postgres
+    restart: unless-stopped
+    networks:
+      - pricespy-net
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pricespy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pricespy_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-pricespy}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/db/migrations/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5433:5432"   # host:5433 → container:5432 (avoids conflict with local postgres)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pricespy} -d ${POSTGRES_DB:-pricespy}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ─────────────────────────────────────────
+  # Zookeeper (required by Kafka)
+  # ─────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: pricespy-zookeeper
+    restart: unless-stopped
+    networks:
+      - pricespy-net
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 2
+    ports:
+      - "2181:2181"
+    # Use zookeeper-shell (available in cp-zookeeper image) for health check
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | timeout 2 bash -c 'cat > /dev/tcp/localhost/2181' && echo imok || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ─────────────────────────────────────────
+  # Kafka
+  # ─────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: pricespy-kafka
+    restart: unless-stopped
+    networks:
+      - pricespy-net
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # Listeners: internal (container-to-container) + external (host)
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168        # 7 days
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824   # 1 GB
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_ZOOKEEPER_CONNECTION_TIMEOUT_MS: 60000
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list > /dev/null 2>&1"]
+      interval: 15s
+      timeout: 15s
+      retries: 15
+      start_period: 60s
+
+  # ─────────────────────────────────────────
+  # Kafka Topic Initializer (one-shot)
+  # Runs after kafka is healthy, creates our 3 topics
+  # ─────────────────────────────────────────
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: pricespy-kafka-init
+    networks:
+      - pricespy-net
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./backend/kafka/init-topics.sh:/init-topics.sh:ro
+    entrypoint: ["/bin/bash", "/init-topics.sh"]
+    restart: "no"
+
+  # ─────────────────────────────────────────
+  # PriceSpy Backend (Go / Gin)
+  # Uncommented in Step 14 once Dockerfile exists
+  # ─────────────────────────────────────────
+  # backend:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: pricespy-backend
+  #   restart: unless-stopped
+  #   networks:
+  #     - pricespy-net
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     kafka:
+  #       condition: service_healthy
+  #   env_file:
+  #     - ./backend/.env
+  #   environment:
+  #     POSTGRES_HOST: postgres
+  #     POSTGRES_PORT: 5432
+  #     KAFKA_BROKERS: kafka:29092
+  #   ports:
+  #     - "8080:8080"
+  #     - "50051:50051"

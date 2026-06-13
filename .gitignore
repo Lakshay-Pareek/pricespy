@@ -1,0 +1,35 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+
+# Go
+*.test
+*.out
+vendor/
+go.sum
+
+# Environment
+.env
+*.env.local
+
+# Node
+node_modules/
+dist/
+.cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.tar
